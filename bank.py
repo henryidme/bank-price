@@ -1,8 +1,7 @@
 import streamlit as st
 import pandas as pd
 import requests
-from bs4 import BeautifulSoup
-from datetime import datetime
+import json
 
 st.set_page_config(page_title="中国银行汇率比价", page_icon="💱", layout="centered")
 st.title("💱 中国银行实时美元汇率")
@@ -14,33 +13,22 @@ def get_usd_rates():
     headers = {"User-Agent": "Mozilla/5.0"}
     r = requests.get(url, headers=headers)
     r.encoding = 'utf-8'
-    soup = BeautifulSoup(r.text, 'html.parser')
+    
+    # 获取页面中的JSON数据
+    json_data = r.text.split('var exchangeJsonData = ')[1].split(';\n')[0]
+    data = json.loads(json_data)
 
-    table = soup.find("table", attrs={"align": "center"})
-    if not table:
-        st.error("无法找到汇率表格，网站结构可能已更改。")
-        return pd.DataFrame()
-
-    rows = table.find_all("tr")[1:]
-    data = []
-    for row in rows:
-        cols = row.find_all("td")
-        if len(cols) >= 8:
-            currency = cols[0].text.strip()
-            if currency == "美元":
-                try:
-                    buy = float(cols[1].text.strip())
-                    sell = float(cols[3].text.strip())
-                    time = cols[7].text.strip()
-                    data.append({
-                        "币种": currency,
-                        "结汇价 (买入)": buy,
-                        "购汇价 (卖出)": sell,
-                        "更新时间": time
-                    })
-                except:
-                    continue
-    return pd.DataFrame(data)
+    usd_data = []
+    for item in data:
+        if item['currency'] == '美元':
+            usd_data.append({
+                "币种": item['currency'],
+                "结汇价 (买入)": float(item['buy']),
+                "购汇价 (卖出)": float(item['sell']),
+                "更新时间": item['time']
+            })
+    
+    return pd.DataFrame(usd_data)
 
 def add_crowns(df):
     df = df.copy()
